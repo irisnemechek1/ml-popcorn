@@ -11,18 +11,9 @@ from sklearn.metrics import roc_auc_score, accuracy_score, confusion_matrix
 train = pd.read_csv("kaggledata/labeledTrainData.tsv", sep="\t")
 test = pd.read_csv("kaggledata/testData.tsv", sep="\t")
 
-# unlabeled = pd.read_csv(
-#     "popcorn_dashboard\MLmodel\kaggledata\unlabeledTrainData.tsv",
-#     sep="\t",
-#     quoting=3,             # ignore quote characters
-#     on_bad_lines="skip",   # skip malformed lines
-#     engine="python"        # more stable for weird TSVs
-# )
-
 
 print(train.shape, test.shape)
 train.head()
-# unlabeled.head()
 
 #clean data
 import re
@@ -61,29 +52,4 @@ import joblib
 
 joblib.dump(model, "logreg_model.pkl")
 joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
-
-
-# #test on unlabeled 
-# unlabeled["clean_review"] = unlabeled["review"].apply(clean_text)
-
-# # ---- VECTORIZE USING TRAINED TFIDF ----
-# X_unlabeled_vec = vectorizer.transform(unlabeled["clean_review"])
-
-# # ---- PREDICT ----
-# unlabeled_preds = model.predict_proba(X_unlabeled_vec)[:, 1]
-
-# # ---- STORE RESULTS ----
-# unlabeled["sentiment_probability"] = unlabeled_preds
-# unlabeled["sentiment_score"] = unlabeled_preds * 100
-# unlabeled["sentiment_label"] = (unlabeled_preds >= 0.5).astype(int)
-
-# # Preview
-# print(unlabeled[0:100])
-
-
-# def predict_sentiment(text):
-#     clean = clean_text(text)
-#     vec = vectorizer.transform([clean])
-#     prob = model.predict_proba(vec)[0,1]
-#     return prob * 100
 
