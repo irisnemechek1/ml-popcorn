@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 
 // ---- Mocked movie-level data for the dashboard ----
-// Later you can replace this with a real API like GET /api/movies/:id/summary
 const MOVIE_SUMMARIES = [
   {
     id: 'movie_1',
@@ -9,9 +8,9 @@ const MOVIE_SUMMARIES = [
     overallScore: 0.82,
     dailyScores: [
       { label: 'Day 1', score: 0.75 },
-      { label: 'Day 2', score: 0.80 },
+      { label: 'Day 2', score: 0.8 },
       { label: 'Day 3', score: 0.85 },
-      { label: 'Day 4', score: 0.90 },
+      { label: 'Day 4', score: 0.9 },
     ],
     topPositivePhrases: ['great acting', 'amazing visuals', 'loved the soundtrack'],
     topNegativePhrases: ['slow beginning', 'a bit predictable'],
@@ -28,9 +27,9 @@ const MOVIE_SUMMARIES = [
     title: 'Mystery Drama',
     overallScore: 0.36,
     dailyScores: [
-      { label: 'Day 1', score: 0.60 },
+      { label: 'Day 1', score: 0.6 },
       { label: 'Day 2', score: 0.45 },
-      { label: 'Day 3', score: 0.30 },
+      { label: 'Day 3', score: 0.3 },
       { label: 'Day 4', score: 0.35 },
     ],
     topPositivePhrases: ['strong performances'],
@@ -49,24 +48,30 @@ const MOVIE_SUMMARIES = [
 // ---- Simple SVG chart for "sentiment over time" ----
 function SentimentChart({ dailyScores }) {
   const width = 380
-  const height = 220
+  const height = 240
   const padding = 40
 
   if (!dailyScores || dailyScores.length === 0) {
     return <p>No sentiment data yet.</p>
   }
 
-  const scores = dailyScores.map((d) => d.score)
-  const minY = Math.min(...scores)
-  const maxY = Math.max(...scores)
-  const range = maxY - minY || 1
+  // FIXED SCALE FOR 0–100
+  const minY = 0
+  const maxY = 100
+  const range = 100
 
-  const points = dailyScores.map((d, i) => {
+  // Convert your model scores (0–1) into percentages (0–100)
+  const percentScores = dailyScores.map((d) => ({
+    label: d.label,
+    score: d.score * 100
+  }))
+
+  const points = percentScores.map((d, i) => {
     const x =
       padding +
-      (dailyScores.length === 1
+      (percentScores.length === 1
         ? (width - 2 * padding) / 2
-        : (i / (dailyScores.length - 1)) * (width - 2 * padding))
+        : (i / (percentScores.length - 1)) * (width - 2 * padding))
 
     const normalized = (d.score - minY) / range
     const y = height - padding - normalized * (height - 2 * padding)
@@ -74,13 +79,13 @@ function SentimentChart({ dailyScores }) {
     return { x, y, label: d.label }
   })
 
-  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(' ')
+  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ")
 
   return (
     <svg
       width={width}
       height={height}
-      style={{ border: '1px solid #ddd', borderRadius: '8px' }}
+      style={{ border: "1px solid #ddd", borderRadius: "8px" }}
     >
       {/* axes */}
       <line
@@ -98,12 +103,12 @@ function SentimentChart({ dailyScores }) {
         stroke="#444"
       />
 
-      {/* y labels */}
-      <text x={8} y={height - padding + 4} fontSize="10">
-        {minY.toFixed(2)}
+      {/* y-axis labels */}
+      <text x={5} y={height - padding + 4} fontSize="10">
+        0
       </text>
-      <text x={8} y={padding + 4} fontSize="10">
-        {maxY.toFixed(2)}
+      <text x={5} y={padding + 4} fontSize="10">
+        100
       </text>
 
       {/* line */}
@@ -114,20 +119,36 @@ function SentimentChart({ dailyScores }) {
         points={polylinePoints}
       />
 
-      {/* points + x labels */}
+      {/* points + labels */}
       {points.map((p, i) => (
         <g key={i}>
           <circle cx={p.x} cy={p.y} r={3} fill="#1d4ed8" />
-          <text
-            x={p.x}
-            y={height - padding + 14}
-            fontSize="9"
-            textAnchor="middle"
-          >
-            {p.label}
-          </text>
         </g>
       ))}
+
+      {/* Review index labels on X axis */}
+      {points.map((p, i) => (
+        <text
+          key={`xlabel-${i}`}
+          x={p.x}
+          y={height - padding + 14}
+          fontSize="9"
+          textAnchor="middle"
+        >
+          {i + 1}
+        </text>
+      ))}
+
+      {/* X-axis main label */}
+      <text
+        x={width / 2}
+        y={height - 5}
+        fontSize="12"
+        textAnchor="middle"
+        fill="#444"
+      >
+        Number of Reviews
+      </text>
     </svg>
   )
 }
@@ -137,11 +158,36 @@ function App() {
   const [selectedMovieId, setSelectedMovieId] = useState(MOVIE_SUMMARIES[0].id)
   const movie = MOVIE_SUMMARIES.find((m) => m.id === selectedMovieId)
 
-  // "try your own review" panel hooked up to your real backend
+  // 🔹 NEW: keep track of extra scores we get from the API per movie
+  // shape: { [movieId]: number[] }
+  const [movieExtraScores, setMovieExtraScores] = useState({})
+
+  // "try your own review" panel
   const [freeText, setFreeText] = useState('')
   const [freeTextScore, setFreeTextScore] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  // 🔹 compute what to show as Overall sentiment score
+  // If we have API scores for this movie, average those;
+  // otherwise fall back to the static overallScore from MOVIE_SUMMARIES.
+  const extraScoresForMovie = movieExtraScores[selectedMovieId] ?? []
+  const overallScore =
+    extraScoresForMovie.length > 0
+      ? extraScoresForMovie.reduce((sum, s) => sum + s, 0) /
+        extraScoresForMovie.length
+      : movie.overallScore
+
+  // 🔹 compute chart data:
+  // - if we have live API scores for this movie, use them as "Review 1, 2, 3..."
+  // - otherwise show the mock dailyScores.
+  const chartData =
+    extraScoresForMovie.length > 0
+      ? extraScoresForMovie.map((score, idx) => ({
+          label: `Review ${idx + 1}`,
+          score,
+        }))
+      : movie.dailyScores
 
   const analyzeFreeText = async () => {
     if (!freeText.trim()) return
@@ -160,7 +206,19 @@ function App() {
       }
 
       const data = await res.json()
+
+      // keep showing the raw score for this specific review
       setFreeTextScore(data.score)
+
+      // 🔹 NEW: update the extra scores for the CURRENTLY SELECTED MOVIE
+      setMovieExtraScores((prev) => {
+        const existing = prev[selectedMovieId] ?? []
+        const updated = [...existing, data.score]
+        return {
+          ...prev,
+          [selectedMovieId]: updated,
+        }
+      })
     } catch (err) {
       console.error(err)
       setErrorMsg('Error calling backend')
@@ -191,13 +249,14 @@ function App() {
         </select>
       </div>
 
-      {/* Main dashboard: left = score + phrases, right = chart + alerts */}
+      {/* Main dashboard */}
       <div className="app-layout">
+        {/* LEFT: overall score + phrases */}
         <div className="text-panel">
           <h2>{movie.title}</h2>
           <p style={{ fontSize: '1.1rem' }}>
             Overall sentiment score:{' '}
-            <strong>{movie.overallScore.toFixed(2)}</strong>
+            <strong>{overallScore.toFixed(2)}</strong>
           </p>
 
           <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem' }}>
@@ -221,9 +280,10 @@ function App() {
           </div>
         </div>
 
+        {/* RIGHT: chart + alerts */}
         <div className="chart-panel">
           <h2>Sentiment Over Time</h2>
-          <SentimentChart dailyScores={movie.dailyScores} />
+          <SentimentChart dailyScores={chartData} />
 
           <h3 style={{ marginTop: '1.5rem' }}>Alerts</h3>
           {movie.alerts.length === 0 ? (
@@ -241,13 +301,13 @@ function App() {
         </div>
       </div>
 
-      {/* Optional: "try your own review" using the real backend */}
+      {/* "Try your own review" hooked to real API */}
       <div style={{ marginTop: '3rem' }}>
         <h2>Try it on a new review</h2>
         <textarea
           rows="4"
           style={{ width: '100%', boxSizing: 'border-box' }}
-          placeholder="Paste a review here..."
+          placeholder="Paste a review here (for the selected movie)..."
           value={freeText}
           onChange={(e) => setFreeText(e.target.value)}
         />
