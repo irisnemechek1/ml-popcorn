@@ -2,7 +2,8 @@ using System.Diagnostics;
 
 public class PythonService
 {
-    private string pythonPath = @"C:\Users\sydne\AppData\Local\Microsoft\WindowsApps\python.exe";
+    // private string pythonPath = @"C:\Users\sydne\AppData\Local\Microsoft\WindowsApps\python.exe";
+    private string pythonPath = @"C:\Users\irism_npx8lts\AppData\Local\Programs\Python\Python312\python.exe";
     private string scriptPath = @"../MLmodel/service.py";
 
     public double GetSentimentScore(string text)
