@@ -5,7 +5,7 @@ const MOVIE_SUMMARIES = [
   {
     id: 'movie_1',
     title: 'Space Adventure',
-    overallScore: 0.82, // baseline if no reviews yet
+    overallScore: 82.0, // baseline if no reviews yet (0–100 scale)
     topPositivePhrases: ['great acting', 'amazing visuals', 'loved the soundtrack'],
     topNegativePhrases: ['slow beginning', 'a bit predictable'],
     alerts: [
@@ -19,7 +19,7 @@ const MOVIE_SUMMARIES = [
   {
     id: 'movie_2',
     title: 'Mystery Drama',
-    overallScore: 0.36,
+    overallScore: 36.0,
     topPositivePhrases: ['strong performances'],
     topNegativePhrases: ['confusing plot', 'bad pacing', 'weak ending'],
     alerts: [
@@ -47,18 +47,19 @@ function SentimentChart({ dailyScores }) {
   const maxY = 100
   const range = maxY - minY
 
-  // Convert 0–1 scores to 0–100
-  const percentScores = dailyScores.map((d) => ({
+  // ✅ BACKEND ALREADY RETURNS 0–100
+  // Clamp to [0, 100] just in case
+  const clamped = dailyScores.map((d) => ({
     label: d.label,
-    score: d.score * 100,
+    score: Math.max(0, Math.min(100, d.score)),
   }))
 
-  const points = percentScores.map((d, i) => {
+  const points = clamped.map((d, i) => {
     const x =
       padding +
-      (percentScores.length === 1
+      (clamped.length === 1
         ? (width - 2 * padding) / 2
-        : (i / (percentScores.length - 1)) * (width - 2 * padding))
+        : (i / (clamped.length - 1)) * (width - 2 * padding))
 
     const normalized = (d.score - minY) / range
     const y = height - padding - normalized * (height - 2 * padding)
@@ -139,15 +140,14 @@ function SentimentChart({ dailyScores }) {
 }
 
 function App() {
-  // Which movie's info to *display* (title/phrases/alerts) – data is shared
+  // Which movie's info to display (title/phrases/alerts)
   const [selectedMovieId, setSelectedMovieId] = useState(MOVIE_SUMMARIES[0].id)
   const movie = MOVIE_SUMMARIES.find((m) => m.id === selectedMovieId)
 
-  // 🔹 Single list of all sentiment scores returned from the backend
-  // Every review you analyze gets pushed into this array
+  // 🔹 All sentiment scores from the backend (0–100)
   const [reviewScores, setReviewScores] = useState([])
 
-  // Text area + latest individual review score
+  // Text area + latest review score
   const [freeText, setFreeText] = useState('')
   const [freeTextScore, setFreeTextScore] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -159,10 +159,10 @@ function App() {
       ? reviewScores.reduce((sum, s) => sum + s, 0) / reviewScores.length
       : movie.overallScore
 
-  // 🔹 Chart points: one per review (using raw 0–1 scores)
+  // 🔹 Chart data: one point per review
   const chartData = reviewScores.map((score, idx) => ({
     label: `Review ${idx + 1}`,
-    score,
+    score, // already 0–100
   }))
 
   const analyzeFreeText = async () => {
@@ -184,7 +184,7 @@ function App() {
       const data = await res.json()
       console.log('API response:', data)
 
-      // Ensure numeric score
+      // Backend returns 0–100, make sure it's numeric
       const score =
         typeof data.score === 'number' ? data.score : parseFloat(data.score)
 
@@ -192,13 +192,12 @@ function App() {
         throw new Error('Score from backend was not numeric')
       }
 
-      // Show score for this specific review
       setFreeTextScore(score)
 
-      // 🔥 Append this score to the list – THIS is what makes the graph grow
+      // Append this score to the list – this drives the graph + average
       setReviewScores((prev) => [...prev, score])
 
-      // Optional: clear the textarea after submit
+      // (Optional) clear textarea:
       // setFreeText('')
     } catch (err) {
       console.error(err)
@@ -212,7 +211,7 @@ function App() {
     <div>
       <h1 className="app-title">Audience Pulse Dashboard</h1>
 
-      {/* Movie selector – just changes the side text, NOT the data */}
+      {/* Movie selector – just changes the side text, not the data */}
       <div style={{ marginBottom: '1.5rem' }}>
         <label htmlFor="movie-select" style={{ marginRight: '0.5rem' }}>
           Select a movie:
