@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 
-// Still using these just for movie name + phrases for now
+// simple movie metadata (for title + phrases + alerts)
 const MOVIE_SUMMARIES = [
   {
     id: 'movie_1',
     title: 'Space Adventure',
-    overallScore: 0.82, // baseline if no new reviews yet
+    overallScore: 0.82,
     topPositivePhrases: ['great acting', 'amazing visuals', 'loved the soundtrack'],
     topNegativePhrases: ['slow beginning', 'a bit predictable'],
     alerts: [
@@ -33,6 +33,7 @@ const MOVIE_SUMMARIES = [
   },
 ]
 
+// === Chart component: 0–100 y-axis, "Number of Reviews" x-axis ===
 function SentimentChart({ dailyScores }) {
   const width = 380
   const height = 240
@@ -42,12 +43,11 @@ function SentimentChart({ dailyScores }) {
     return <p>No sentiment data yet.</p>
   }
 
-  // Fixed 0–100 scale
   const minY = 0
   const maxY = 100
   const range = maxY - minY
 
-  // Convert your scores (0–1) to percentages
+  // convert 0–1 scores to 0–100
   const percentScores = dailyScores.map((d) => ({
     label: d.label,
     score: d.score * 100,
@@ -90,7 +90,7 @@ function SentimentChart({ dailyScores }) {
         stroke="#444"
       />
 
-      {/* y-axis labels 0–100 */}
+      {/* y-axis labels 0 and 100 */}
       <text x={5} y={height - padding + 4} fontSize="10">
         0
       </text>
@@ -111,7 +111,7 @@ function SentimentChart({ dailyScores }) {
         <circle key={i} cx={p.x} cy={p.y} r={3} fill="#1d4ed8" />
       ))}
 
-      {/* x tick labels = review index */}
+      {/* x tick labels: 1, 2, 3... = number of reviews */}
       {points.map((p, i) => (
         <text
           key={`xlabel-${i}`}
@@ -139,34 +139,29 @@ function SentimentChart({ dailyScores }) {
 }
 
 function App() {
+  // which movie's info to display (title/phrases/alerts), but data is shared
   const [selectedMovieId, setSelectedMovieId] = useState(MOVIE_SUMMARIES[0].id)
   const movie = MOVIE_SUMMARIES.find((m) => m.id === selectedMovieId)
 
-  // For each movie, store the list of individual sentiment scores from the API
-  // { movie_1: [0.7, 0.8], movie_2: [0.3, 0.4, ...] }
-  const [movieReviewScores, setMovieReviewScores] = useState({})
+  // 🔹 single list of all review scores (treat all as same movie)
+  const [reviewScores, setReviewScores] = useState([])
 
-  // Free-text review + its latest score
+  // text area + latest review score
   const [freeText, setFreeText] = useState('')
   const [freeTextScore, setFreeTextScore] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  // Scores for current movie
-  const scoresForMovie = movieReviewScores[selectedMovieId] ?? []
-
-  // What to show as "Overall sentiment score:"
-  // Here I'm showing the *latest* review score if any exist,
-  // otherwise the baseline static overallScore.
+  // 🔹 average of all scores, or fallback to baseline
   const effectiveOverallScore =
-    scoresForMovie.length > 0
-      ? scoresForMovie[scoresForMovie.length - 1]
+    reviewScores.length > 0
+      ? reviewScores.reduce((sum, s) => sum + s, 0) / reviewScores.length
       : movie.overallScore
 
-  // Build data for the chart: one point per review for THIS movie
-  const chartData = scoresForMovie.map((score, idx) => ({
-    label: `Review ${idx + 1}`, // not shown as text now, but kept for clarity
-    score, // raw 0–1 score
+  // 🔹 chart points: each review as one point
+  const chartData = reviewScores.map((score, idx) => ({
+    label: `Review ${idx + 1}`,
+    score, // raw 0–1
   }))
 
   const analyzeFreeText = async () => {
@@ -187,17 +182,11 @@ function App() {
 
       const data = await res.json()
 
-      // Show score for this specific review
+      // latest review’s score
       setFreeTextScore(data.score)
 
-      // Append this score to the list for the *currently selected movie*
-      setMovieReviewScores((prev) => {
-        const existing = prev[selectedMovieId] ?? []
-        return {
-          ...prev,
-          [selectedMovieId]: [...existing, data.score],
-        }
-      })
+      // 🔥 append this score to the shared list (same movie for all)
+      setReviewScores((prev) => [...prev, data.score])
     } catch (err) {
       console.error(err)
       setErrorMsg('Error calling backend')
@@ -210,7 +199,7 @@ function App() {
     <div>
       <h1 className="app-title">Audience Pulse Dashboard</h1>
 
-      {/* Movie selector */}
+      {/* Movie selector – just changes the text/phrases, not the data */}
       <div style={{ marginBottom: '1.5rem' }}>
         <label htmlFor="movie-select" style={{ marginRight: '0.5rem' }}>
           Select a movie:
@@ -259,7 +248,7 @@ function App() {
           </div>
         </div>
 
-        {/* RIGHT: per-review scores graph + alerts */}
+        {/* RIGHT: review scores graph + alerts */}
         <div className="chart-panel">
           <h2>Sentiment Over Time</h2>
           <SentimentChart dailyScores={chartData} />
@@ -280,13 +269,13 @@ function App() {
         </div>
       </div>
 
-      {/* API-connected "try a review" area */}
+      {/* Connected to your real API */}
       <div style={{ marginTop: '3rem' }}>
         <h2>Try it on a new review</h2>
         <textarea
           rows="4"
           style={{ width: '100%', boxSizing: 'border-box' }}
-          placeholder="Paste a review here (for the selected movie)..."
+          placeholder="Paste a review here..."
           value={freeText}
           onChange={(e) => setFreeText(e.target.value)}
         />
