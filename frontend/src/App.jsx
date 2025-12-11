@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 
-// simple movie metadata (for title + phrases + alerts)
+// Simple movie metadata (just for title/phrases/alerts text)
 const MOVIE_SUMMARIES = [
   {
     id: 'movie_1',
     title: 'Space Adventure',
-    overallScore: 0.82,
+    overallScore: 0.82, // baseline if no reviews yet
     topPositivePhrases: ['great acting', 'amazing visuals', 'loved the soundtrack'],
     topNegativePhrases: ['slow beginning', 'a bit predictable'],
     alerts: [
@@ -33,7 +33,7 @@ const MOVIE_SUMMARIES = [
   },
 ]
 
-// === Chart component: 0–100 y-axis, "Number of Reviews" x-axis ===
+// === Chart component: fixed 0–100 y-axis, "Number of Reviews" on x-axis ===
 function SentimentChart({ dailyScores }) {
   const width = 380
   const height = 240
@@ -47,7 +47,7 @@ function SentimentChart({ dailyScores }) {
   const maxY = 100
   const range = maxY - minY
 
-  // convert 0–1 scores to 0–100
+  // Convert 0–1 scores to 0–100
   const percentScores = dailyScores.map((d) => ({
     label: d.label,
     score: d.score * 100,
@@ -74,7 +74,7 @@ function SentimentChart({ dailyScores }) {
       height={height}
       style={{ border: '1px solid #ddd', borderRadius: '8px' }}
     >
-      {/* axes */}
+      {/* Axes */}
       <line
         x1={padding}
         y1={padding}
@@ -90,7 +90,7 @@ function SentimentChart({ dailyScores }) {
         stroke="#444"
       />
 
-      {/* y-axis labels 0 and 100 */}
+      {/* Y-axis labels 0 and 100 */}
       <text x={5} y={height - padding + 4} fontSize="10">
         0
       </text>
@@ -98,7 +98,7 @@ function SentimentChart({ dailyScores }) {
         100
       </text>
 
-      {/* line */}
+      {/* Line */}
       <polyline
         fill="none"
         stroke="#1d4ed8"
@@ -106,12 +106,12 @@ function SentimentChart({ dailyScores }) {
         points={polylinePoints}
       />
 
-      {/* points */}
+      {/* Points */}
       {points.map((p, i) => (
         <circle key={i} cx={p.x} cy={p.y} r={3} fill="#1d4ed8" />
       ))}
 
-      {/* x tick labels: 1, 2, 3... = number of reviews */}
+      {/* X tick labels: 1, 2, 3... = number of reviews */}
       {points.map((p, i) => (
         <text
           key={`xlabel-${i}`}
@@ -124,7 +124,7 @@ function SentimentChart({ dailyScores }) {
         </text>
       ))}
 
-      {/* x-axis main label */}
+      {/* X-axis main label */}
       <text
         x={width / 2}
         y={height - 5}
@@ -139,29 +139,30 @@ function SentimentChart({ dailyScores }) {
 }
 
 function App() {
-  // which movie's info to display (title/phrases/alerts), but data is shared
+  // Which movie's info to *display* (title/phrases/alerts) – data is shared
   const [selectedMovieId, setSelectedMovieId] = useState(MOVIE_SUMMARIES[0].id)
   const movie = MOVIE_SUMMARIES.find((m) => m.id === selectedMovieId)
 
-  // 🔹 single list of all review scores (treat all as same movie)
+  // 🔹 Single list of all sentiment scores returned from the backend
+  // Every review you analyze gets pushed into this array
   const [reviewScores, setReviewScores] = useState([])
 
-  // text area + latest review score
+  // Text area + latest individual review score
   const [freeText, setFreeText] = useState('')
   const [freeTextScore, setFreeTextScore] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  // 🔹 average of all scores, or fallback to baseline
+  // 🔹 Overall sentiment = average of all scores so far, or baseline if none yet
   const effectiveOverallScore =
     reviewScores.length > 0
       ? reviewScores.reduce((sum, s) => sum + s, 0) / reviewScores.length
       : movie.overallScore
 
-  // 🔹 chart points: each review as one point
+  // 🔹 Chart points: one per review (using raw 0–1 scores)
   const chartData = reviewScores.map((score, idx) => ({
     label: `Review ${idx + 1}`,
-    score, // raw 0–1
+    score,
   }))
 
   const analyzeFreeText = async () => {
@@ -181,12 +182,24 @@ function App() {
       }
 
       const data = await res.json()
+      console.log('API response:', data)
 
-      // latest review’s score
-      setFreeTextScore(data.score)
+      // Ensure numeric score
+      const score =
+        typeof data.score === 'number' ? data.score : parseFloat(data.score)
 
-      // 🔥 append this score to the shared list (same movie for all)
-      setReviewScores((prev) => [...prev, data.score])
+      if (Number.isNaN(score)) {
+        throw new Error('Score from backend was not numeric')
+      }
+
+      // Show score for this specific review
+      setFreeTextScore(score)
+
+      // 🔥 Append this score to the list – THIS is what makes the graph grow
+      setReviewScores((prev) => [...prev, score])
+
+      // Optional: clear the textarea after submit
+      // setFreeText('')
     } catch (err) {
       console.error(err)
       setErrorMsg('Error calling backend')
@@ -199,7 +212,7 @@ function App() {
     <div>
       <h1 className="app-title">Audience Pulse Dashboard</h1>
 
-      {/* Movie selector – just changes the text/phrases, not the data */}
+      {/* Movie selector – just changes the side text, NOT the data */}
       <div style={{ marginBottom: '1.5rem' }}>
         <label htmlFor="movie-select" style={{ marginRight: '0.5rem' }}>
           Select a movie:
@@ -248,7 +261,7 @@ function App() {
           </div>
         </div>
 
-        {/* RIGHT: review scores graph + alerts */}
+        {/* RIGHT: per-review scores graph + alerts */}
         <div className="chart-panel">
           <h2>Sentiment Over Time</h2>
           <SentimentChart dailyScores={chartData} />
