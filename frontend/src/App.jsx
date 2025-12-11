@@ -1,17 +1,11 @@
 import React, { useState } from 'react'
 
-// ---- Mocked movie-level data for the dashboard ----
+// Still using these just for movie name + phrases for now
 const MOVIE_SUMMARIES = [
   {
     id: 'movie_1',
     title: 'Space Adventure',
-    overallScore: 0.82,
-    dailyScores: [
-      { label: 'Day 1', score: 0.75 },
-      { label: 'Day 2', score: 0.8 },
-      { label: 'Day 3', score: 0.85 },
-      { label: 'Day 4', score: 0.9 },
-    ],
+    overallScore: 0.82, // baseline if no new reviews yet
     topPositivePhrases: ['great acting', 'amazing visuals', 'loved the soundtrack'],
     topNegativePhrases: ['slow beginning', 'a bit predictable'],
     alerts: [
@@ -26,12 +20,6 @@ const MOVIE_SUMMARIES = [
     id: 'movie_2',
     title: 'Mystery Drama',
     overallScore: 0.36,
-    dailyScores: [
-      { label: 'Day 1', score: 0.6 },
-      { label: 'Day 2', score: 0.45 },
-      { label: 'Day 3', score: 0.3 },
-      { label: 'Day 4', score: 0.35 },
-    ],
     topPositivePhrases: ['strong performances'],
     topNegativePhrases: ['confusing plot', 'bad pacing', 'weak ending'],
     alerts: [
@@ -45,7 +33,6 @@ const MOVIE_SUMMARIES = [
   },
 ]
 
-// ---- Simple SVG chart for "sentiment over time" ----
 function SentimentChart({ dailyScores }) {
   const width = 380
   const height = 240
@@ -55,15 +42,15 @@ function SentimentChart({ dailyScores }) {
     return <p>No sentiment data yet.</p>
   }
 
-  // FIXED SCALE FOR 0–100
+  // Fixed 0–100 scale
   const minY = 0
   const maxY = 100
-  const range = 100
+  const range = maxY - minY
 
-  // Convert your model scores (0–1) into percentages (0–100)
+  // Convert your scores (0–1) to percentages
   const percentScores = dailyScores.map((d) => ({
     label: d.label,
-    score: d.score * 100
+    score: d.score * 100,
   }))
 
   const points = percentScores.map((d, i) => {
@@ -76,16 +63,16 @@ function SentimentChart({ dailyScores }) {
     const normalized = (d.score - minY) / range
     const y = height - padding - normalized * (height - 2 * padding)
 
-    return { x, y, label: d.label }
+    return { x, y }
   })
 
-  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ")
+  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(' ')
 
   return (
     <svg
       width={width}
       height={height}
-      style={{ border: "1px solid #ddd", borderRadius: "8px" }}
+      style={{ border: '1px solid #ddd', borderRadius: '8px' }}
     >
       {/* axes */}
       <line
@@ -103,7 +90,7 @@ function SentimentChart({ dailyScores }) {
         stroke="#444"
       />
 
-      {/* y-axis labels */}
+      {/* y-axis labels 0–100 */}
       <text x={5} y={height - padding + 4} fontSize="10">
         0
       </text>
@@ -119,14 +106,12 @@ function SentimentChart({ dailyScores }) {
         points={polylinePoints}
       />
 
-      {/* points + labels */}
+      {/* points */}
       {points.map((p, i) => (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r={3} fill="#1d4ed8" />
-        </g>
+        <circle key={i} cx={p.x} cy={p.y} r={3} fill="#1d4ed8" />
       ))}
 
-      {/* Review index labels on X axis */}
+      {/* x tick labels = review index */}
       {points.map((p, i) => (
         <text
           key={`xlabel-${i}`}
@@ -139,7 +124,7 @@ function SentimentChart({ dailyScores }) {
         </text>
       ))}
 
-      {/* X-axis main label */}
+      {/* x-axis main label */}
       <text
         x={width / 2}
         y={height - 5}
@@ -154,40 +139,35 @@ function SentimentChart({ dailyScores }) {
 }
 
 function App() {
-  // which movie is selected on the dashboard
   const [selectedMovieId, setSelectedMovieId] = useState(MOVIE_SUMMARIES[0].id)
   const movie = MOVIE_SUMMARIES.find((m) => m.id === selectedMovieId)
 
-  // 🔹 NEW: keep track of extra scores we get from the API per movie
-  // shape: { [movieId]: number[] }
-  const [movieExtraScores, setMovieExtraScores] = useState({})
+  // For each movie, store the list of individual sentiment scores from the API
+  // { movie_1: [0.7, 0.8], movie_2: [0.3, 0.4, ...] }
+  const [movieReviewScores, setMovieReviewScores] = useState({})
 
-  // "try your own review" panel
+  // Free-text review + its latest score
   const [freeText, setFreeText] = useState('')
   const [freeTextScore, setFreeTextScore] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  // 🔹 compute what to show as Overall sentiment score
-  // If we have API scores for this movie, average those;
-  // otherwise fall back to the static overallScore from MOVIE_SUMMARIES.
-  const extraScoresForMovie = movieExtraScores[selectedMovieId] ?? []
-  const overallScore =
-    extraScoresForMovie.length > 0
-      ? extraScoresForMovie.reduce((sum, s) => sum + s, 0) /
-        extraScoresForMovie.length
+  // Scores for current movie
+  const scoresForMovie = movieReviewScores[selectedMovieId] ?? []
+
+  // What to show as "Overall sentiment score:"
+  // Here I'm showing the *latest* review score if any exist,
+  // otherwise the baseline static overallScore.
+  const effectiveOverallScore =
+    scoresForMovie.length > 0
+      ? scoresForMovie[scoresForMovie.length - 1]
       : movie.overallScore
 
-  // 🔹 compute chart data:
-  // - if we have live API scores for this movie, use them as "Review 1, 2, 3..."
-  // - otherwise show the mock dailyScores.
-  const chartData =
-    extraScoresForMovie.length > 0
-      ? extraScoresForMovie.map((score, idx) => ({
-          label: `Review ${idx + 1}`,
-          score,
-        }))
-      : movie.dailyScores
+  // Build data for the chart: one point per review for THIS movie
+  const chartData = scoresForMovie.map((score, idx) => ({
+    label: `Review ${idx + 1}`, // not shown as text now, but kept for clarity
+    score, // raw 0–1 score
+  }))
 
   const analyzeFreeText = async () => {
     if (!freeText.trim()) return
@@ -207,16 +187,15 @@ function App() {
 
       const data = await res.json()
 
-      // keep showing the raw score for this specific review
+      // Show score for this specific review
       setFreeTextScore(data.score)
 
-      // 🔹 NEW: update the extra scores for the CURRENTLY SELECTED MOVIE
-      setMovieExtraScores((prev) => {
+      // Append this score to the list for the *currently selected movie*
+      setMovieReviewScores((prev) => {
         const existing = prev[selectedMovieId] ?? []
-        const updated = [...existing, data.score]
         return {
           ...prev,
-          [selectedMovieId]: updated,
+          [selectedMovieId]: [...existing, data.score],
         }
       })
     } catch (err) {
@@ -256,7 +235,7 @@ function App() {
           <h2>{movie.title}</h2>
           <p style={{ fontSize: '1.1rem' }}>
             Overall sentiment score:{' '}
-            <strong>{overallScore.toFixed(2)}</strong>
+            <strong>{effectiveOverallScore.toFixed(2)}</strong>
           </p>
 
           <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem' }}>
@@ -280,7 +259,7 @@ function App() {
           </div>
         </div>
 
-        {/* RIGHT: chart + alerts */}
+        {/* RIGHT: per-review scores graph + alerts */}
         <div className="chart-panel">
           <h2>Sentiment Over Time</h2>
           <SentimentChart dailyScores={chartData} />
@@ -301,7 +280,7 @@ function App() {
         </div>
       </div>
 
-      {/* "Try your own review" hooked to real API */}
+      {/* API-connected "try a review" area */}
       <div style={{ marginTop: '3rem' }}>
         <h2>Try it on a new review</h2>
         <textarea
