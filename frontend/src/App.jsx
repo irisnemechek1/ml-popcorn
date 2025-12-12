@@ -4,30 +4,48 @@ import React, { useState } from 'react'
 const MOVIE_SUMMARIES = [
   {
     id: 'movie_1',
-    title: 'Space Adventure',
-    overallScore: 82.0, // baseline if no reviews yet (0–100 scale)
-    topPositivePhrases: ['great acting', 'amazing visuals', 'loved the soundtrack'],
-    topNegativePhrases: ['slow beginning', 'a bit predictable'],
+    title: 'How to Train Your Dragon (Live-Action Remake)',
+    overallScore: 88.0, 
+    topPositivePhrases: [
+      'faithful to the original',
+      'impressive visuals',
+      'strong emotional moments',
+      'great dragon designs'
+    ],
+    topNegativePhrases: [
+      'unnecessary remake',
+      'some scenes felt rushed',
+      'less charm than the animated version'
+    ],
     alerts: [
       {
         type: 'spike',
-        date: 'Day 4',
-        message: 'Sentiment spiked after positive social media buzz.',
+        date: 'Day 2',
+        message:
+          'Sentiment spiked after early audiences praised the visuals and emotional storytelling.',
       },
     ],
   },
   {
     id: 'movie_2',
-    title: 'Mystery Drama',
-    overallScore: 36.0,
-    topPositivePhrases: ['strong performances'],
-    topNegativePhrases: ['confusing plot', 'bad pacing', 'weak ending'],
+    title: 'Frankenstein',
+    overallScore: 54.0, 
+    topPositivePhrases: [
+      'dark atmosphere',
+      'interesting take on the classic story',
+      'strong lead performance'
+    ],
+    topNegativePhrases: [
+      'slow pacing',
+      'confusing narrative',
+      'underdeveloped characters'
+    ],
     alerts: [
       {
         type: 'drop',
         date: 'Day 3',
         message:
-          'Sentiment dropped sharply after audiences reacted badly to the twist ending.',
+          'Sentiment dropped after viewers criticized the pacing and unclear plot direction.',
       },
     ],
   },
@@ -47,8 +65,6 @@ function SentimentChart({ dailyScores }) {
   const maxY = 100
   const range = maxY - minY
 
-  // ✅ BACKEND ALREADY RETURNS 0–100
-  // Clamp to [0, 100] just in case
   const clamped = dailyScores.map((d) => ({
     label: d.label,
     score: Math.max(0, Math.min(100, d.score)),
